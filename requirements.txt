@@ -1,35 +1,22 @@
-# Core dependencies
-streamlit>=1.28.0
-fastapi>=0.104.0
-uvicorn>=0.24.0
-python-multipart>=0.0.6
+streamlit==1.35.0
+openai==1.30.0
+httpx==0.27.2
 
-# AI/ML dependencies
-openai>=1.3.0
-transformers>=4.35.0
-torch>=2.1.0
-langchain>=0.0.340
-chromadb>=0.4.15
-sentence-transformers>=2.2.2
+# Web version: Keep speech_recognition for backward compatibility
+# (Only for Python 3.8-3.12, skip if using Python 3.13+)
+SpeechRecognition==3.10.4
+# PyAudio requires manual installation on Windows via .whl file
+# PyAudio==0.2.14
 
-# Speech processing
-speechrecognition>=3.10.0
-pydub>=0.25.1
-whisper>=1.1.10
+# Desktop GUI dependencies (Python 3.13+ compatible)
+# Use PySide6 6.8+ for Python 3.13+ support
+PySide6>=6.8.0
 
-# Translation
-googletrans==4.0.0rc1
+# TTS for desktop app
+pyttsx3==2.90
 
-# Database
-sqlite3
-pymongo>=4.6.0
-
-# Utilities
-requests>=2.31.0
-python-dotenv>=1.0.0
-numpy>=1.24.0
-pandas>=2.1.0
-
-# Additional dependencies
-httpcore==0.18.0
-httpx==0.25.0
+# FREE Speech Recognition for Desktop GUI (works on all Python versions)
+# Completely offline, no network required
+vosk>=0.3.45
+# PyAudio for microphone input (same as above, manual install on Windows)
+# pyaudio
