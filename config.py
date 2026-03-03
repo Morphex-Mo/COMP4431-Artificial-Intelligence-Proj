@@ -378,3 +378,33 @@ MODEL_INFO = {
     "en": "vosk-model-small-en-us-0.15 (约40MB)",
     "ja": "vosk-model-small-ja-0.22 (约48MB)"
 }
+
+
+# =============================================================================
+# 翻译加速配置 (Translation Speed Optimization)
+# =============================================================================
+
+# 使用快速模式（简化 prompt，减少生成量）
+USE_FAST_MODE = True  # True: 2-3秒 | False: 5-10秒
+
+# Ollama 快速推理参数
+OLLAMA_FAST_OPTIONS = {
+    "temperature": 0.3,      # 降低随机性，加快采样
+    "num_predict": 300,      # 限制最大 tokens（快速模式：300）
+    "top_p": 0.8,
+    "top_k": 20,             # 减小采样空间
+}
+
+# Ollama 完整质量参数
+OLLAMA_FULL_OPTIONS = {
+    "temperature": 0.7,
+    "num_predict": 800,
+    "top_p": 0.95,
+}
+
+# 推荐的模型（按速度排序）
+RECOMMENDED_MODELS = {
+    "fastest": "qwen2.5:1.5b",   # ~1s，适合实时对话
+    "balanced": "qwen2.5:3b",    # ~2s，推荐使用
+    "quality": "qwen2.5:7b",     # ~5s，质量最高
+}

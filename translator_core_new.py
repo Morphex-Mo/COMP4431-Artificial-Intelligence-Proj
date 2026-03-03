@@ -3,6 +3,14 @@ import os
 import json
 import traceback
 
+# 导入加速配置
+try:
+    from config import USE_FAST_MODE, OLLAMA_FAST_OPTIONS, OLLAMA_FULL_OPTIONS
+except ImportError:
+    USE_FAST_MODE = True
+    OLLAMA_FAST_OPTIONS = {"temperature": 0.3, "num_predict": 300, "top_p": 0.8, "top_k": 20}
+    OLLAMA_FULL_OPTIONS = {"temperature": 0.7, "num_predict": 800, "top_p": 0.95}
+
 
 def _read_credentials(json_path: str = "credentials.json", legacy_path: str = "credentials") -> Dict:
     """Read credentials with support for a structured JSON file containing multiple tokens.
@@ -151,48 +159,69 @@ def generate_translation_and_advice(
             }
 
         # Build prompt and messages
-        prompt = (
-            "Act as a cross-cultural translation assistant. Output JSON data based on the following requirements.\n\n"
-            "Input content:\n"
-            f"Source Text: {s_text}\n"
-            f"Source Language: {s_lang_name}\n"
-            f"Target Language: {t_lang_name}\n"
-            f"Scenario: {scenario}\n"
-            f"Tone Preference: {tone}\n\n"
-            "IMPORTANT TRANSLATION RULES:\n"
-            f"1. ALL translations (literal_translation and natural_expressions.text) MUST be in {t_lang_name}.\n"
-            f"2. Explanations and cultural advice should be in {s_lang_name}.\n"
-            f"3. You are translating FROM {s_lang_name} TO {t_lang_name}.\n\n"
-            "IMPORTANT CULTURAL CONTEXT:\n"
-            "- First, identify if the source text is a cultural idiom or greeting with non-literal meaning.\n"
-            "- Chinese greetings like \"吃了吗？\" (Have you eaten?) or \"去哪儿？\" (Where are you going?) are NOT literal questions but equivalent to \"How are you?\" or \"Hello!\"\n"
-            "- Japanese formal greetings like \"お疲れ様です\" are ritual phrases, not literal comments on tiredness.\n"
-            "- Translate the ACTUAL INTENT and CULTURAL FUNCTION, not just the literal words.\n"
-            f"- For 'natural_expressions', provide what a native {t_lang_name} speaker would ACTUALLY say in the same social context.\n\n"
-            "Please return the following JSON structure (do not include Markdown code block markers, ensure valid JSON):\n"
-            "{\n"
-            f'  "literal_translation": "Word-for-word translation in {t_lang_name} (for reference only, may sound unnatural)",\n'
-            '  "natural_expressions": [\n'
-            f'    {{"text": "Natural expression in {t_lang_name} that a native speaker would ACTUALLY say", "explanation": "Why this expression is used and when it is appropriate (explain in {s_lang_name})"}},\n'
-            f'    {{"text": "Alternative natural expression in {t_lang_name}", "explanation": "Context and usage notes (in {s_lang_name})"}},\n'
-            f'    {{"text": "Another contextually appropriate option in {t_lang_name}", "explanation": "Situational guidance (in {s_lang_name})"}}\n'
-            '  ],\n'
-            f'  "cultural_advice": "Cultural advice (Markdown string, written in {s_lang_name}. Based on the \'{scenario}\' scenario and \'{tone}\' tone, provide deep cultural background analysis. Include: 1. The TRUE MEANING and social function of the source phrase (if it is an idiom/greeting); 2. How native speakers of {t_lang_name} express the same intent; 3. Cultural mindset differences; 4. Etiquette rules and potential misunderstandings; 5. Emotional reactions to expect. Use **bold** for emphasis, bullet points for clarity, ensure empty lines between sections, provide specific examples.)"\n'
-            "}\n\n"
-            f"Example for translating Chinese \"吃了吗？\" → English ({s_lang_name} → {t_lang_name}):\n"
-            "{\n"
-            '  "literal_translation": "Have you eaten?",\n'
-            '  "natural_expressions": [\n'
-            '    {"text": "How are you?", "explanation": "这是英语中最常见的问候语,相当于中文的\'吃了吗?\'的社交功能"},\n'
-            '    {"text": "How\'s it going?", "explanation": "更随意的问候方式,适合朋友之间"},\n'
-            '    {"text": "How\'s everything?", "explanation": "关心对方近况的友好问候"}\n'
-            '  ],\n'
-            '  "cultural_advice": "\'吃了吗?\'在中文里是传统问候语,并非真的询问是否用餐,而是表达关心..."\n'
-            "}\n"
-        )
+        # 使用快速模式或完整模式
+        if USE_FAST_MODE:
+            # 快速模式：简化 prompt，减少生成量（速度提升 2-3x）
+            prompt = (
+                f"Translate from {s_lang_name} to {t_lang_name}. Return JSON:\n\n"
+                f"Text: {s_text}\n"
+                f"Scenario: {scenario}\n\n"
+                "Output format:\n"
+                "{\n"
+                f'  "literal_translation": "word-for-word in {t_lang_name}",\n'
+                f'  "natural_expressions": [{{"text": "natural {t_lang_name} expression", "explanation": "brief note in {s_lang_name}"}}],\n'
+                f'  "cultural_advice": "Key cultural tip in {s_lang_name} (50 words max)"\n'
+                "}\n\n"
+                f"Rules: All translations in {t_lang_name}. Identify idioms/greetings and translate their TRUE social function. Be concise."
+            )
+            
+            system_msg = f"Expert translator {s_lang_name}→{t_lang_name}. Output JSON only. Be fast and accurate."
+        else:
+            # 完整模式：详细 prompt（质量优先）
+            prompt = (
+                "Act as a cross-cultural translation assistant. Output JSON data based on the following requirements.\n\n"
+                "Input content:\n"
+                f"Source Text: {s_text}\n"
+                f"Source Language: {s_lang_name}\n"
+                f"Target Language: {t_lang_name}\n"
+                f"Scenario: {scenario}\n"
+                f"Tone Preference: {tone}\n\n"
+                "IMPORTANT TRANSLATION RULES:\n"
+                f"1. ALL translations (literal_translation and natural_expressions.text) MUST be in {t_lang_name}.\n"
+                f"2. Explanations and cultural advice should be in {s_lang_name}.\n"
+                f"3. You are translating FROM {s_lang_name} TO {t_lang_name}.\n\n"
+                "IMPORTANT CULTURAL CONTEXT:\n"
+                "- First, identify if the source text is a cultural idiom or greeting with non-literal meaning.\n"
+                "- Chinese greetings like \"吃了吗？\" (Have you eaten?) or \"去哪儿？\" (Where are you going?) are NOT literal questions but equivalent to \"How are you?\" or \"Hello!\"\n"
+                "- Japanese formal greetings like \"お疲れ様です\" are ritual phrases, not literal comments on tiredness.\n"
+                "- Translate the ACTUAL INTENT and CULTURAL FUNCTION, not just the literal words.\n"
+                f"- For 'natural_expressions', provide what a native {t_lang_name} speaker would ACTUALLY say in the same social context.\n\n"
+                "Please return the following JSON structure (do not include Markdown code block markers, ensure valid JSON):\n"
+                "{\n"
+                f'  "literal_translation": "Word-for-word translation in {t_lang_name} (for reference only, may sound unnatural)",\n'
+                '  "natural_expressions": [\n'
+                f'    {{"text": "Natural expression in {t_lang_name} that a native speaker would ACTUALLY say", "explanation": "Why this expression is used and when it is appropriate (explain in {s_lang_name})"}},\n'
+                f'    {{"text": "Alternative natural expression in {t_lang_name}", "explanation": "Context and usage notes (in {s_lang_name})"}},\n'
+                f'    {{"text": "Another contextually appropriate option in {t_lang_name}", "explanation": "Situational guidance (in {s_lang_name})"}}\n'
+                '  ],\n'
+                f'  "cultural_advice": "Cultural advice (Markdown string, written in {s_lang_name}. Based on the \'{scenario}\' scenario and \'{tone}\' tone, provide deep cultural background analysis. Include: 1. The TRUE MEANING and social function of the source phrase (if it is an idiom/greeting); 2. How native speakers of {t_lang_name} express the same intent; 3. Cultural mindset differences; 4. Etiquette rules and potential misunderstandings; 5. Emotional reactions to expect. Use **bold** for emphasis, bullet points for clarity, ensure empty lines between sections, provide specific examples.)"\n'
+                "}\n\n"
+                f"Example for translating Chinese \"吃了吗？\" → English ({s_lang_name} → {t_lang_name}):\n"
+                "{\n"
+                '  "literal_translation": "Have you eaten?",\n'
+                '  "natural_expressions": [\n'
+                '    {"text": "How are you?", "explanation": "这是英语中最常见的问候语,相当于中文的\'吃了吗?\'的社交功能"},\n'
+                '    {"text": "How\'s it going?", "explanation": "更随意的问候方式,适合朋友之间"},\n'
+                '    {"text": "How\'s everything?", "explanation": "关心对方近况的友好问候"}\n'
+                '  ],\n'
+                '  "cultural_advice": "\'吃了吗?\'在中文里是传统问候语,并非真的询问是否用餐,而是表达关心..."\n'
+                "}\n"
+            )
+            
+            system_msg = f"You are an expert cross-cultural translation assistant. You translate FROM {s_lang_name} TO {t_lang_name}. ALL translation outputs (literal_translation and natural_expressions.text) MUST be in {t_lang_name}. Explanations should be in {s_lang_name}. Always identify the TRUE social function of phrases before translating. Output valid JSON only."
 
         messages = [
-            {"role": "system", "content": f"You are an expert cross-cultural translation assistant. You translate FROM {s_lang_name} TO {t_lang_name}. ALL translation outputs (literal_translation and natural_expressions.text) MUST be in {t_lang_name}. Explanations should be in {s_lang_name}. Always identify the TRUE social function of phrases before translating. Output valid JSON only."},
+            {"role": "system", "content": system_msg},
             {"role": "user", "content": prompt},
         ]
 
@@ -265,7 +294,7 @@ def generate_translation_and_advice(
             else:
                 # Auto-detect model based on api_url
                 if "localhost" in api_url or "11434" in api_url:
-                    model_name = "qwen2.5:latest"  # Good multilingual Ollama model
+                    model_name = "qwen2.5:3b"  # Faster 3B model (2-3s vs 10s for 7B)
                 elif "deepseek" in api_url:
                     model_name = "deepseek-chat"
                 else:
@@ -293,11 +322,15 @@ def generate_translation_and_advice(
                     if not ollama_url.endswith("/api/chat"):
                         ollama_url = ollama_url.rstrip("/") + "/api/chat"
                     
+                    # 使用配置的加速参数
+                    options = OLLAMA_FAST_OPTIONS if USE_FAST_MODE else OLLAMA_FULL_OPTIONS
+                    
                     payload = {
                         "model": model_name,
                         "messages": messages,
                         "stream": False,
-                        "format": "json"  # Request JSON format from Ollama
+                        "format": "json",  # Request JSON format from Ollama
+                        "options": options
                     }
                     
                     response = requests.post(ollama_url, json=payload, timeout=60)
